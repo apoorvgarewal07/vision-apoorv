@@ -81,6 +81,8 @@ audit.jsonl
 uploaded_zip/
 graphify-out/
 .agents/
+data/raw/
+*.zip
 
 # ==========================================
 # IDE & Operating System Files
