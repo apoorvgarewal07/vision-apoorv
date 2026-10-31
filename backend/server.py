@@ -31,6 +31,16 @@ from decision import evaluate_trigger_policy
 from pipeline import load_bundle
 from physics import compute_gas_path_deltas, compute_health_index, compute_sensor_attribution
 
+from services import (
+    oil_service,
+    inspection_service,
+    maintenance_service,
+    aircraft_systems_service,
+    fusion_engine,
+    knowledge_graph_service,
+    decision_service,
+)
+
 # In-memory registry of pre-trained subset models
 BUNDLES: Dict[str, Any] = {}
 FLEET_SERVICE: Any = None
@@ -159,6 +169,19 @@ class TrustValidationResponse(BaseModel):
     stuck: List[str]
     abstain: bool
     reasons: List[str]
+
+
+class MaintenanceOptimizationPayload(BaseModel):
+    subset: str = Field(default="FD001", description="C-MAPSS subset identifier")
+    cost_failure: float = Field(default=100_000.0, description="Cost of an in-service failure ($)")
+    cost_waste_per_cycle: float = Field(default=100.0, description="Cost of 1 wasted cycle ($/cycle)")
+    lead_time: int = Field(default=15, description="Logistics lead buffer (cycles)")
+    risk_budget_eps: float = Field(default=0.05, description="Maximum tolerable failure rate ceiling")
+
+
+class GraphQueryPayload(BaseModel):
+    query: str = Field(default="recurring", description="Query string e.g. 'recurring', 'evidence', 'inspection'")
+    entity_id: str = Field(default="ENG-U24", description="Target entity ID in graph")
 
 
 # ==========================================
@@ -795,3 +818,334 @@ async def replay_telemetry(
                 break
 
     return EventSourceResponse(event_generator())
+
+
+# ==========================================
+# VISION 2.0: Fleet, Decision, and Multimodal APIs
+# ==========================================
+
+FLEET_OVERVIEW_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+@app.get("/api/v1/fleet/overview")
+async def get_fleet_overview(subset: str = Query("FD001", description="C-MAPSS fleet subset")):
+    """Retrieves fleet-wide prognostics overview, risk ranking, and assigned hangar bays."""
+    sub = subset.upper()
+    if sub in FLEET_OVERVIEW_CACHE:
+        return FLEET_OVERVIEW_CACHE[sub]
+
+    if sub not in BUNDLES and (ARTIFACTS_DIR / f"bundle_{sub}.pkl").exists():
+        BUNDLES[sub] = load_bundle(sub)
+    bundle = BUNDLES.get(sub)
+    if not bundle:
+        raise HTTPException(status_code=404, detail=f"Subset {sub} bundle not loaded.")
+
+    test_raw: pd.DataFrame = bundle["test_raw"]
+    last_idx = test_raw.groupby("unit").tail(1).index
+    last_rows = test_raw.loc[last_idx].sort_values("unit")
+
+    engines_list = []
+    crit_count = 0
+    mon_count = 0
+    healthy_count = 0
+
+    # Evaluate last cycle features with pre-trained LightGBM and Mondrian tables
+    df_norm = bundle["normalizer"].transform(test_raw)
+    df_feats = compute_causal_features(df_norm)
+    feat_cols = bundle["feat_cols"]
+    X_last = df_feats.loc[last_idx][feat_cols]
+
+    preds = bundle["model"].predict(X_last)
+    calib_90 = bundle["calib_90"]
+    calib_95 = bundle["calib_95"]
+
+    bay_names = ["Bay A (Heavy Overhaul)", "Bay B (Hot Section & Borescope)", "Bay C (Line Maintenance)"]
+
+    for i in range(len(last_rows)):
+        u = int(last_rows.iloc[i]["unit"])
+        cyc = int(last_rows.iloc[i]["cycle"])
+        p_raw = float(preds[i])
+        p, lb90, lb95 = predict_dual_bounds(p_raw, calib_90, calib_95)
+        hi = round(compute_health_index(p, cap_rul=CAP_RUL), 3)
+        risk = round(1.0 - hi, 3)
+
+        if lb90 <= 15:
+            urgency = "CRITICAL"
+            crit_count += 1
+        elif lb90 <= 40:
+            urgency = "MONITOR"
+            mon_count += 1
+        else:
+            urgency = "HEALTHY"
+            healthy_count += 1
+
+        engines_list.append({
+            "unit_id": u,
+            "current_cycle": cyc,
+            "predicted_rul": round(p, 1),
+            "lower_bound_90": round(lb90, 1),
+            "upper_bound_90": round(p + (p - lb90), 1),
+            "health_index": hi,
+            "risk_score": risk,
+            "urgency_level": urgency,
+            "assigned_bay": None,
+        })
+
+    # Sort descending by risk
+    engines_list.sort(key=lambda e: (-e["risk_score"], e["lower_bound_90"]))
+
+    # Assign hangar bays to top 3 urgent units
+    allocated_bays = []
+    for idx, eng in enumerate(engines_list):
+        if eng["urgency_level"] in ("CRITICAL", "MONITOR") and len(allocated_bays) < len(bay_names):
+            bay_name = bay_names[len(allocated_bays)]
+            eng["assigned_bay"] = bay_name
+            allocated_bays.append({
+                "bay_id": f"BAY-{len(allocated_bays) + 1}",
+                "bay_name": bay_name,
+                "unit_id": eng["unit_id"],
+                "urgency": eng["urgency_level"],
+                "predicted_rul": eng["predicted_rul"],
+                "target_cycle": eng["current_cycle"] + 15,
+            })
+
+    result = {
+        "subset": sub,
+        "total_engines": len(engines_list),
+        "critical_count": crit_count,
+        "monitor_count": mon_count,
+        "healthy_count": healthy_count,
+        "engines": engines_list,
+        "allocated_bays": allocated_bays,
+        "meta": {"data_mode": "EMPIRICAL", "provenance": "NASA Ames C-MAPSS", "synthetic": False},
+    }
+
+    FLEET_OVERVIEW_CACHE[sub] = result
+    return result
+
+
+@app.get("/api/v1/engine/{unit_id}")
+async def get_engine_telemetry(unit_id: int, subset: str = Query("FD001")):
+    """Retrieves full multi-cycle sensor history and alerts for an individual engine."""
+    sub = subset.upper()
+    if sub not in BUNDLES and (ARTIFACTS_DIR / f"bundle_{sub}.pkl").exists():
+        BUNDLES[sub] = load_bundle(sub)
+    bundle = BUNDLES.get(sub)
+    if not bundle:
+        raise HTTPException(status_code=404, detail=f"Subset {sub} not loaded.")
+
+    test_raw: pd.DataFrame = bundle["test_raw"]
+    df_u = test_raw[test_raw["unit"] == unit_id].sort_values("cycle")
+    if len(df_u) == 0:
+        raise HTTPException(status_code=404, detail=f"Unit {unit_id} not found in {sub}.")
+
+    readings = []
+    for _, r in df_u.iterrows():
+        cyc = int(r["cycle"])
+        sens = {s: float(r[s]) for s in KEEP_SENSORS if s in r}
+        ops = {"op1": float(r["op1"]), "op2": float(r["op2"]), "op3": float(r["op3"])}
+        readings.append({"cycle": cyc, "sensors": sens, "operational_settings": ops, "regime": 0})
+
+    last_row = df_u.iloc[-1]
+    last_cycle = int(last_row["cycle"])
+    last_sensors = {s: float(last_row[s]) for s in KEEP_SENSORS if s in last_row}
+    last_ops = {"op1": float(last_row["op1"]), "op2": float(last_row["op2"]), "op3": float(last_row["op3"])}
+
+    window_rows = df_u.tail(30)
+    buf = {s: list(window_rows[s].astype(float)) for s in KEEP_SENSORS}
+    op_list = [float(last_ops["op1"]), float(last_ops["op2"]), float(last_ops["op3"])]
+    p, lb90, lb95, thermo, attributions = run_inference_on_window(
+        operational_settings=op_list,
+        sensor_readings=buf,
+        cycle=last_cycle,
+        subset=sub
+    )
+
+    alerts = []
+    if lb90 <= 15:
+        alerts.append("CRITICAL: Conformal 90% LB breached maintenance trigger threshold (<= 15c)")
+    elif lb90 <= 30:
+        alerts.append("ADVISORY: Conformal lower bound approaching lead-time horizon (<= 30c)")
+    if p - lb90 > 60:
+        alerts.append("UNCONFIRMED: Epistemic variance exceeds actionable confidence interval")
+
+    urgency = "CRITICAL" if lb90 <= 15 else ("MONITOR" if lb90 <= 40 else "HEALTHY")
+
+    return {
+        "unit_id": unit_id,
+        "subset": sub,
+        "current_cycle": last_cycle,
+        "total_cycles": len(df_u),
+        "operational_settings": last_ops,
+        "latest_sensors": last_sensors,
+        "sensor_history": readings,
+        "alerts": alerts,
+        "predicted_rul": round(p, 1),
+        "conformal_lower_90": round(lb90, 1),
+        "conformal_upper_90": round(p + (p - lb90), 1),
+        "health_index": round(compute_health_index(p, cap_rul=CAP_RUL), 3),
+        "urgency": urgency,
+        "thermodynamics": thermo,
+        "attributions": attributions,
+        "meta": {"data_mode": "EMPIRICAL", "provenance": "NASA Ames C-MAPSS"},
+    }
+
+
+@app.get("/api/v1/engine/{unit_id}/replay")
+async def get_engine_replay_trajectory(unit_id: int, subset: str = Query("FD001")):
+    """Retrieves structured sequence trajectory for 3D digital twin animation replay."""
+    sub = subset.upper()
+    if sub not in BUNDLES and (ARTIFACTS_DIR / f"bundle_{sub}.pkl").exists():
+        BUNDLES[sub] = load_bundle(sub)
+    bundle = BUNDLES.get(sub)
+    if not bundle:
+        raise HTTPException(status_code=404, detail=f"Subset {sub} not loaded.")
+
+    test_raw: pd.DataFrame = bundle["test_raw"]
+    df_u = test_raw[test_raw["unit"] == unit_id].sort_values("cycle")
+    if len(df_u) == 0:
+        raise HTTPException(status_code=404, detail=f"Unit {unit_id} not found in {sub}.")
+
+    frames = []
+    for _, r in df_u.iterrows():
+        frames.append({
+            "cycle": int(r["cycle"]),
+            "fan_speed": float(r.get("s8", 2388.0)),
+            "core_speed": float(r.get("s9", 9050.0)),
+            "hpc_temp_T30": float(r.get("s3", 1588.0)),
+            "lpt_temp_T50": float(r.get("s4", 1405.0)),
+            "hpc_pressure_P30": float(r.get("s7", 553.0)),
+            "fuel_flow_ratio": float(r.get("s12", 521.8)),
+            "bypass_ratio": float(r.get("s15", 8.42)),
+            "coolant_bleed_W31": float(r.get("s20", 38.9)),
+        })
+
+    return {
+        "unit_id": unit_id,
+        "subset": sub,
+        "total_cycles": len(df_u),
+        "current_cycle": int(df_u.iloc[-1]["cycle"]),
+        "frames": frames,
+    }
+
+
+@app.post("/api/v1/decision/optimize")
+async def optimize_decision(payload: MaintenanceOptimizationPayload):
+    """Executes economic cost-loss optimization on fleet engines."""
+    overview = await get_fleet_overview(payload.subset)
+    engines = overview["engines"]
+    return decision_service.optimize_fleet_decisions(
+        engines_data=engines,
+        cost_failure=payload.cost_failure,
+        cost_waste_per_cycle=payload.cost_waste_per_cycle,
+        lead_time=payload.lead_time,
+        risk_budget_eps=payload.risk_budget_eps,
+        subset=payload.subset
+    )
+
+
+@app.get("/api/v1/decision/policy")
+async def get_decision_policy(subset: str = Query("FD001")):
+    """Returns precomputed policy comparison benchmarks."""
+    overview = await get_fleet_overview(subset)
+    engines = overview["engines"]
+    res = decision_service.optimize_fleet_decisions(engines_data=engines, subset=subset)
+    return {
+        "subset": subset,
+        "benchmarks": res["policy_benchmarks"],
+        "cost_parameters": res["cost_parameters"],
+        "allocated_bays": res["allocated_bays"],
+    }
+
+
+# --- Non-Sensor Intelligence Routes ---
+
+@app.get("/api/v1/oil/{unit_id}")
+async def get_oil_intelligence(unit_id: int):
+    """Returns spectrographic oil reports and wear trend analysis."""
+    reports = oil_service.get_reports(unit_id)
+    trends = oil_service.detect_wear_trends(unit_id)
+    return {
+        "unit_id": unit_id,
+        "reports": reports,
+        "wear_trend_analysis": trends,
+    }
+
+
+@app.post("/api/v1/oil/{unit_id}/upload")
+async def upload_oil_report(unit_id: int, payload: Dict[str, Any]):
+    """Accepts uploaded spectrographic oil test data."""
+    return oil_service.add_report(unit_id, payload)
+
+
+@app.get("/api/v1/inspection/{unit_id}")
+async def get_visual_inspections(unit_id: int):
+    """Returns borescope records, defect list, and inspection summary."""
+    inspections = inspection_service.get_inspections(unit_id)
+    summary = inspection_service.get_summary(unit_id)
+    return {
+        "unit_id": unit_id,
+        "inspections": inspections,
+        "summary": summary,
+    }
+
+
+@app.post("/api/v1/inspection/{unit_id}")
+async def record_visual_inspection(unit_id: int, payload: Dict[str, Any]):
+    """Records new borescope finding."""
+    return inspection_service.add_inspection(unit_id, payload)
+
+
+@app.get("/api/v1/maintenance/{unit_id}")
+async def get_maintenance_history(unit_id: int):
+    """Returns maintenance logs and chronic repeated defect detection."""
+    logs = maintenance_service.get_logs(unit_id)
+    repeated = maintenance_service.detect_repeated_faults(unit_id)
+    return {
+        "unit_id": unit_id,
+        "logs": logs,
+        "repeated_faults": repeated,
+    }
+
+
+@app.post("/api/v1/maintenance/{unit_id}")
+async def add_maintenance_log(unit_id: int, payload: Dict[str, Any]):
+    """Appends a maintenance work order entry."""
+    return maintenance_service.add_log(unit_id, payload)
+
+
+@app.get("/api/v1/aircraft/{unit_id}/systems")
+async def get_aircraft_systems(unit_id: int):
+    """Returns Fuel, Hydraulics, Electrical, APU, Landing Gear, Flight ops, and Structural fatigue."""
+    return aircraft_systems_service.get_aircraft_status(unit_id)
+
+
+@app.get("/api/v1/fusion/{unit_id}")
+async def get_multimodal_fusion(unit_id: int, subset: str = Query("FD001")):
+    """Executes 8-channel multimodal health fusion for an aircraft engine."""
+    # Obtain latest telemetry if engine is loaded
+    try:
+        telemetry = await get_engine_telemetry(unit_id, subset=subset)
+    except Exception:
+        telemetry = None
+
+    return fusion_engine.fuse_aircraft_health(
+        unit_id=unit_id,
+        telemetry_tick=telemetry,
+        subset=subset
+    )
+
+
+@app.get("/api/v1/graph/nodes")
+async def get_knowledge_graph_nodes():
+    """Returns full relational graph nodes and edges."""
+    return knowledge_graph_service.get_full_graph()
+
+
+@app.post("/api/v1/graph/query")
+async def query_knowledge_graph(payload: GraphQueryPayload):
+    """Executes multi-hop traversal query on aircraft knowledge graph."""
+    return knowledge_graph_service.query_relationships(
+        query_type=payload.query,
+        entity_id=payload.entity_id
+    )

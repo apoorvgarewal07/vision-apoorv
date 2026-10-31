@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Navbar } from './components/Navbar';
+import { Navbar, NavTab } from './components/Navbar';
 import { KpiDeck } from './components/KpiDeck';
 import { TrajectoryChart } from './components/TrajectoryChart';
 import { GasPathPanel } from './components/GasPathPanel';
@@ -8,8 +8,35 @@ import { FleetRiskTable } from './components/FleetRiskTable';
 import { PolicyLab } from './components/PolicyLab';
 import { TurbofanCanvas } from './components_3d/TurbofanCanvas';
 import { ComponentCardsGrid } from './components_3d/ComponentCardsGrid';
+import RulFanChart from './components/RulFanChart';
+import SensorChart from './components/SensorChart';
+import SensorImportanceBar from './components/SensorImportanceBar';
+import FleetStatCards from './components/FleetStatCards';
+import FleetTable from './components/FleetTable';
+import EconomicSandbox from './components/EconomicSandbox';
+import HangarScheduler from './components/HangarScheduler';
+import JudgePresenterBar from './components/JudgePresenterBar';
+import DemoTourModal from './components/DemoTourModal';
+import ScientificIntegrityCard from './components/ScientificIntegrityCard';
+import OilIntelligencePanel from './components/OilIntelligencePanel';
+import BorescopeInspectionPanel from './components/BorescopeInspectionPanel';
+import MaintenanceHistoryPanel from './components/MaintenanceHistoryPanel';
+import AircraftSystemsPanel from './components/AircraftSystemsPanel';
+import MultimodalFusionDeck from './components/MultimodalFusionDeck';
+import KnowledgeGraphView from './components/KnowledgeGraphView';
 import { TelemetryTick } from './types';
-import { ShieldCheck, Database, HardDrive, Terminal, Box, LineChart } from 'lucide-react';
+import {
+  ShieldCheck,
+  Database,
+  HardDrive,
+  Terminal,
+  Box,
+  LineChart,
+  Activity,
+  Layers,
+  Sparkles,
+  RotateCcw,
+} from 'lucide-react';
 
 const createDefaultTick = (unit: number, cycle: number = 20): TelemetryTick => ({
   unit,
@@ -23,24 +50,24 @@ const createDefaultTick = (unit: number, cycle: number = 20): TelemetryTick => (
   abstain: false,
   reasons: [],
   sensors: {
-    s2: 642.35 + (cycle * 0.02),
-    s3: 1589.12 + (cycle * 0.08),
-    s4: 1406.45 + (cycle * 0.07),
-    s7: 553.82 - (cycle * 0.03),
+    s2: 642.35 + cycle * 0.02,
+    s3: 1589.12 + cycle * 0.08,
+    s4: 1406.45 + cycle * 0.07,
+    s7: 553.82 - cycle * 0.03,
     s8: 2388.04,
-    s9: 9052.1 + (cycle * 0.05),
-    s11: 47.48 + (cycle * 0.005),
-    s12: 521.85 - (cycle * 0.02),
+    s9: 9052.1 + cycle * 0.05,
+    s11: 47.48 + cycle * 0.005,
+    s12: 521.85 - cycle * 0.02,
     s13: 2388.06,
     s14: 8139.2,
-    s15: 8.43 + (cycle * 0.002),
+    s15: 8.43 + cycle * 0.002,
     s17: 392.2,
-    s20: 38.92 - (cycle * 0.003),
-    s21: 23.36 - (cycle * 0.002),
+    s20: 38.92 - cycle * 0.003,
+    s21: 23.36 - cycle * 0.002,
   },
   thermodynamics: {
-    T30_T24_ratio: 2.474 + (cycle * 0.0001),
-    Ps30_P30_ratio: 0.0857 - (cycle * 0.00005),
+    T30_T24_ratio: 2.474 + cycle * 0.0001,
+    Ps30_P30_ratio: 0.0857 - cycle * 0.00005,
     T30_T24_delta: 0.0015,
     Ps30_P30_delta: -0.0003,
   },
@@ -49,7 +76,7 @@ const createDefaultTick = (unit: number, cycle: number = 20): TelemetryTick => (
     's4 (T50 LPT Outlet Temp)': 0.22,
     's3 (T30 HPC Outlet Temp)': 0.18,
     's12 (Phi Fuel Flow Ratio)': 0.14,
-    's15 (Bypass Duct Bleed)': 0.10,
+    's15 (Bypass Duct Bleed)': 0.1,
     's2 (T24 LPC Outlet Temp)': 0.08,
   },
 });
@@ -69,14 +96,35 @@ export const App: React.FC = () => {
   const [streamSpeed, setStreamSpeed] = useState<number>(500);
   const [isStreaming, setIsStreaming] = useState<boolean>(true);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'idle'>('connected');
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'digital-twin' | 'fleet' | 'policy'>('cockpit');
+  const [activeTab, setActiveTab] = useState<NavTab>('fusion');
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
-  const [cockpitViewMode, setCockpitViewMode] = useState<'chart' | '3d'>('chart');
+  const [cockpitChartMode, setCockpitChartMode] = useState<'fan' | 'trajectory' | 'multi-sensor'>('fan');
+
+  // Presentation Scenarios and Modals
+  const [activeScenario, setActiveScenario] = useState<any>(null);
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
+  const [isIntegrityOpen, setIsIntegrityOpen] = useState<boolean>(false);
+
+  // Fleet overview data cache
+  const [fleetData, setFleetData] = useState<any[]>([]);
+  const [fleetFilter, setFleetFilter] = useState<string>('ALL');
 
   const [currentTick, setCurrentTick] = useState<TelemetryTick>(() => createDefaultTick(1, 20));
   const [history, setHistory] = useState<TelemetryTick[]>(() => createInitialHistory(1, 20));
 
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Fetch Fleet overview when subset changes
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/v1/fleet/overview?subset=${currentSubset}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.engines) {
+          setFleetData(data.engines);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch fleet overview:', err));
+  }, [currentSubset]);
 
   // Connect or disconnect SSE stream
   useEffect(() => {
@@ -104,14 +152,11 @@ export const App: React.FC = () => {
           if (prev.length === 0) return [tick];
           const lastCycle = prev[prev.length - 1].cycle;
           if (tick.cycle < lastCycle) {
-            // Trajectory finished and looped back to cycle 1
             return [tick];
           }
           if (tick.cycle === lastCycle) {
-            // In-place update to prevent duplicate cycle appending
             return [...prev.slice(0, -1), tick];
           }
-          // Strictly advancing cycle
           const next = [...prev, tick];
           return next.slice(-120);
         });
@@ -120,13 +165,8 @@ export const App: React.FC = () => {
       }
     };
 
-    es.onopen = () => {
-      setConnectionStatus('connected');
-    };
-
-    // Attach single message listener to avoid duplicate trigger
+    es.onopen = () => setConnectionStatus('connected');
     es.onmessage = handleData;
-
     es.onerror = (err) => {
       console.warn('SSE stream reconnecting...', err);
       setConnectionStatus('reconnecting');
@@ -152,16 +192,51 @@ export const App: React.FC = () => {
     setHistory(initial);
   };
 
-  const handleSelectEngineFromFleet = (unit: number) => {
+  const handleSelectEngine = (unit: number) => {
     setCurrentUnit(unit);
-    setActiveTab('cockpit');
+    setActiveTab('fusion');
     const initial = createInitialHistory(unit, 25);
     setCurrentTick(initial[initial.length - 1]);
     setHistory(initial);
   };
 
+  const handleSelectScenario = (scenario: any) => {
+    setActiveScenario(scenario);
+    if (scenario.subset && scenario.subset !== currentSubset) {
+      setCurrentSubset(scenario.subset);
+    }
+    if (scenario.unitId) {
+      setCurrentUnit(scenario.unitId);
+      const initial = createInitialHistory(scenario.unitId, scenario.id === 2 ? 142 : 25);
+      setCurrentTick(initial[initial.length - 1]);
+      setHistory(initial);
+    }
+    if (scenario.componentFocus) {
+      setSelectedComponent(scenario.componentFocus);
+    }
+    if (scenario.tab) {
+      const tabMap: Record<string, NavTab> = {
+        twin: 'digital-twin',
+        detail: 'cockpit',
+        fleet: 'fleet',
+        oil: 'oil',
+        maintenance: 'maintenance',
+        economics: 'economics',
+      };
+      setActiveTab(tabMap[scenario.tab] || 'fusion');
+    }
+  };
+
+  const handleResetDemo = () => {
+    setActiveScenario(null);
+    setCurrentSubset('FD001');
+    setCurrentUnit(1);
+    setSelectedComponent(null);
+    setActiveTab('fusion');
+  };
+
   return (
-    <div className="min-h-screen bg-aerospace-950 text-slate-100 flex flex-col font-sans selection:bg-telemetry-cyan selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-sky-500 selection:text-white pb-20">
       {/* Flight Deck Header */}
       <Navbar
         currentSubset={currentSubset}
@@ -175,144 +250,296 @@ export const App: React.FC = () => {
         connectionStatus={connectionStatus}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onOpenTour={() => setIsTourOpen(true)}
+        onOpenIntegrity={() => setIsIntegrityOpen(true)}
       />
 
+      {/* Active Demo Scenario Notification Pill */}
+      {activeScenario && (
+        <div className="bg-slate-900 border-b border-sky-500/40 px-4 py-2 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center space-x-2">
+            <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${activeScenario.badgeColor}`}>
+              {activeScenario.badge}
+            </span>
+            <span className="text-white font-bold">{activeScenario.title}:</span>
+            <span className="text-slate-300 hidden md:inline">{activeScenario.description}</span>
+          </div>
+          <button
+            onClick={handleResetDemo}
+            className="flex items-center space-x-1 text-slate-400 hover:text-white transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Scenario</span>
+          </button>
+        </div>
+      )}
+
       {/* Main Workspace Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {activeTab === 'cockpit' && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* Top Gauges & Conformal Risk Banner */}
+      <main className="flex-1 max-w-[98rem] w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
+        {/* TAB 1: Multimodal Fusion Deck */}
+        {activeTab === 'fusion' && (
+          <div className="space-y-5 animate-fade-in">
+            <MultimodalFusionDeck
+              unitId={currentUnit}
+              onSelectComponent={(comp) => {
+                setSelectedComponent(comp);
+                setActiveTab('digital-twin');
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB 2: 3D Digital Twin */}
+        {activeTab === 'digital-twin' && (
+          <div className="space-y-5 animate-fade-in">
             <KpiDeck tick={currentTick} />
 
-            {/* View Mode Segmented Controls */}
-            <div className="flex items-center justify-between border-b border-aerospace-800 pb-2">
+            <div className="grid grid-cols-1 gap-5">
+              <TurbofanCanvas
+                telemetryTick={currentTick}
+                selectedComponentExternal={selectedComponent}
+                onSelectComponentExternal={setSelectedComponent}
+              />
+
+              <ComponentCardsGrid
+                selectedComponentId={selectedComponent}
+                onSelectComponent={setSelectedComponent}
+                telemetryTick={currentTick}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <GasPathPanel tick={currentTick} />
+              <SensorAttribution tick={currentTick} />
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Telemetry & RUL Prognostics Cockpit */}
+        {activeTab === 'cockpit' && (
+          <div className="space-y-5 animate-fade-in">
+            <KpiDeck tick={currentTick} />
+
+            {/* Segmented Chart Selector */}
+            <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
-                  Primary Telemetry View
+                <span className="text-xs font-mono uppercase tracking-[0.08em] text-slate-300 font-bold">
+                  Prognostic Analytics View
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-aerospace-800 text-telemetry-cyan border border-aerospace-700">
-                  Unit #{currentUnit}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700">
+                  Engine #{currentUnit}
                 </span>
               </div>
-              <div className="flex items-center gap-1 bg-aerospace-900 p-1 rounded-lg border border-aerospace-800 text-xs">
+
+              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-mono">
                 <button
-                  onClick={() => setCockpitViewMode('chart')}
-                  className={`px-3 py-1 rounded font-medium transition-all flex items-center gap-1.5 ${
-                    cockpitViewMode === 'chart'
-                      ? 'bg-telemetry-cyan text-white shadow-sm font-semibold'
-                      : 'text-aerospace-400 hover:text-white hover:bg-aerospace-850'
+                  onClick={() => setCockpitChartMode('fan')}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                    cockpitChartMode === 'fan'
+                      ? 'bg-sky-600 text-white shadow-sm font-bold'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Mondrian Fan Chart</span>
+                </button>
+                <button
+                  onClick={() => setCockpitChartMode('trajectory')}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                    cockpitChartMode === 'trajectory'
+                      ? 'bg-sky-600 text-white shadow-sm font-bold'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
                   <LineChart className="w-3.5 h-3.5" />
-                  <span>Degradation Curve</span>
+                  <span>Degradation History</span>
                 </button>
                 <button
-                  onClick={() => setCockpitViewMode('3d')}
-                  className={`px-3 py-1 rounded font-medium transition-all flex items-center gap-1.5 ${
-                    cockpitViewMode === '3d'
-                      ? 'bg-telemetry-cyan text-white shadow-sm font-semibold'
-                      : 'text-aerospace-400 hover:text-white hover:bg-aerospace-850'
+                  onClick={() => setCockpitChartMode('multi-sensor')}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                    cockpitChartMode === 'multi-sensor'
+                      ? 'bg-sky-600 text-white shadow-sm font-bold'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <Box className="w-3.5 h-3.5" />
-                  <span>3D Digital Twin</span>
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Multi-Sensor Series</span>
                 </button>
               </div>
             </div>
 
-            {/* Toggleable view: Trajectory Chart or 3D Engine */}
-            {cockpitViewMode === 'chart' ? (
+            {/* Dynamic Chart Display */}
+            {cockpitChartMode === 'fan' ? (
+              <RulFanChart
+                currentCycle={currentTick.cycle}
+                predictedRul={currentTick.point_rul}
+                conformalLower90={currentTick.lower_bound_90}
+                conformalUpper90={currentTick.point_rul + (currentTick.point_rul - currentTick.lower_bound_90)}
+                leadTime={15}
+                unitId={currentUnit}
+              />
+            ) : cockpitChartMode === 'trajectory' ? (
               <TrajectoryChart history={history} threshold={15} />
             ) : (
-              <div className="space-y-4">
-                <TurbofanCanvas
-                  telemetryTick={currentTick}
-                  selectedComponentExternal={selectedComponent}
-                  onSelectComponentExternal={setSelectedComponent}
-                />
-              </div>
+              <SensorChart
+                unitId={currentUnit}
+                sensorHistory={history.map((h) => ({
+                  cycle: h.cycle,
+                  s3: h.sensors.s3,
+                  s7: h.sensors.s7,
+                  s4: h.sensors.s4,
+                  s2: h.sensors.s2,
+                  s9: h.sensors.s9,
+                  s8: h.sensors.s8,
+                }))}
+              />
             )}
 
-            {/* Thermodynamics & Explainable Sensor Attributions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Explainable Attribution & Gas Path Panels */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <SensorImportanceBar />
               <GasPathPanel tick={currentTick} />
-              <SensorAttribution tick={currentTick} />
             </div>
           </div>
         )}
 
-        {activeTab === 'digital-twin' && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* Top Gauges & Conformal Risk Banner */}
-            <KpiDeck tick={currentTick} />
-
-            {/* Full 3D Digital Twin Stage */}
-            <TurbofanCanvas
-              telemetryTick={currentTick}
-              selectedComponentExternal={selectedComponent}
-              onSelectComponentExternal={setSelectedComponent}
-            />
-
-            {/* 6 Subsystem Inspection Cards Grid */}
-            <ComponentCardsGrid
-              selectedComponentId={selectedComponent}
-              onSelectComponent={setSelectedComponent}
-              telemetryTick={currentTick}
-            />
-
-            {/* Gas Path & Sensor Attributions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <GasPathPanel tick={currentTick} />
-              <SensorAttribution tick={currentTick} />
-            </div>
-          </div>
-        )}
-
+        {/* TAB 4: Fleet Risk Board */}
         {activeTab === 'fleet' && (
-          <div className="animate-fadeIn">
-            <FleetRiskTable onSelectEngine={handleSelectEngineFromFleet} />
+          <div className="space-y-5 animate-fade-in">
+            <FleetStatCards
+              fleet={fleetData}
+              activeFilter={fleetFilter}
+              onFilterStatus={setFleetFilter}
+            />
+
+            <FleetTable
+              fleet={fleetData}
+              selectedUnitId={currentUnit}
+              onSelectUnit={handleSelectEngine}
+              activeFilter={fleetFilter}
+              onFilterChange={setFleetFilter}
+            />
+
+            <HangarScheduler
+              fleet={fleetData}
+              leadTime={15}
+              onSelectUnit={handleSelectEngine}
+            />
           </div>
         )}
 
-        {activeTab === 'policy' && (
-          <div className="animate-fadeIn">
-            <PolicyLab />
+        {/* TAB 5: Oil Intelligence */}
+        {activeTab === 'oil' && (
+          <div className="space-y-5 animate-fade-in">
+            <OilIntelligencePanel unitId={currentUnit} />
+          </div>
+        )}
+
+        {/* TAB 6: Borescope NDT Optical Findings */}
+        {activeTab === 'borescope' && (
+          <div className="space-y-5 animate-fade-in">
+            <BorescopeInspectionPanel unitId={currentUnit} />
+          </div>
+        )}
+
+        {/* TAB 7: Maintenance Log & Chronic Defects */}
+        {activeTab === 'maintenance' && (
+          <div className="space-y-5 animate-fade-in">
+            <MaintenanceHistoryPanel unitId={currentUnit} />
+          </div>
+        )}
+
+        {/* TAB 8: Aircraft Systems & Airframe Fatigue */}
+        {activeTab === 'systems' && (
+          <div className="space-y-5 animate-fade-in">
+            <AircraftSystemsPanel unitId={currentUnit} />
+          </div>
+        )}
+
+        {/* TAB 9: Diagnostic Knowledge Graph */}
+        {activeTab === 'graph' && (
+          <div className="space-y-5 animate-fade-in">
+            <KnowledgeGraphView unitId={currentUnit} />
+          </div>
+        )}
+
+        {/* TAB 10: Economic Sandbox & Policy Lab */}
+        {activeTab === 'economics' && (
+          <div className="space-y-5 animate-fade-in">
+            <EconomicSandbox
+              fleet={fleetData}
+              onSelectUnit={handleSelectEngine}
+            />
+            <div className="pt-4 border-t border-slate-800">
+              <PolicyLab />
+            </div>
           </div>
         )}
       </main>
 
-      {/* Flight Deck Footer */}
-      <footer className="bg-aerospace-900 border-t border-aerospace-800 py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-aerospace-400">
-          <div className="flex items-center gap-4">
+      {/* Floating Presentation Bar (Hotkeys 1-6) */}
+      <JudgePresenterBar
+        activeScenario={activeScenario}
+        onSelectScenario={handleSelectScenario}
+        onResetDemo={handleResetDemo}
+        onOpenIntegrityCard={() => setIsIntegrityOpen(true)}
+      />
+
+      {/* Guided Tour Modal */}
+      <DemoTourModal
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        onLaunchScenario={(id) => {
+          const scenario = [
+            { id: 1, subset: 'FD001', unitId: 10, tab: 'twin', title: 'Nominal Fleet Baseline', badge: 'Healthy' },
+            { id: 2, subset: 'FD001', unitId: 34, tab: 'twin', componentFocus: 'hpc', title: 'Imminent HPC Failure Alert', badge: 'Critical' },
+            { id: 3, subset: 'FD002', unitId: 18, tab: 'fleet', title: 'Multi-Regime Dynamic', badge: 'Multi-Regime' },
+            { id: 4, subset: 'FD001', unitId: 42, tab: 'oil', title: 'Oil Spectrometry Warning', badge: 'Wear Advisory' },
+            { id: 5, subset: 'FD001', unitId: 55, tab: 'maintenance', title: 'Repeated Chronic Defect', badge: 'Chronic' },
+            { id: 6, subset: 'FD001', unitId: 1, tab: 'economics', title: 'Economic Policy Optimization', badge: 'Economic Win' },
+          ].find((s) => s.id === id);
+          if (scenario) handleSelectScenario(scenario);
+        }}
+      />
+
+      {/* Scientific Integrity & Technical Disclosure Modal */}
+      <ScientificIntegrityCard
+        isOpen={isIntegrityOpen}
+        onClose={() => setIsIntegrityOpen(false)}
+      />
+
+      {/* Enterprise Flight Deck Footer */}
+      <footer className="bg-slate-950 border-t border-slate-800 py-3 mt-auto">
+        <div className="max-w-[98rem] mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-1.5 text-slate-300">
-              <ShieldCheck className="w-4 h-4 text-telemetry-emerald" />
-              <span>Mondrian Split-Conformal 90% LB Guaranteed</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Mondrian Split-Conformal 90% LB Certified</span>
             </div>
-            <span className="text-aerospace-700">•</span>
+            <span className="text-slate-700">&bull;</span>
             <div className="flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5" />
+              <Database className="w-3.5 h-3.5 text-sky-400" />
               <span>C-MAPSS Subset: {currentSubset}</span>
             </div>
-            <span className="text-aerospace-700 hidden sm:inline">•</span>
+            <span className="text-slate-700 hidden sm:inline">&bull;</span>
             <div className="hidden sm:flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5" />
-              <span>Artifacts: Signed SHA-256 Bundle</span>
+              <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Signed LightGBM Model Bundle</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <a
-              href="/docs"
+              href="http://localhost:8000/docs"
               target="_blank"
               rel="noreferrer"
-              className="text-telemetry-cyan hover:underline flex items-center gap-1"
+              className="text-sky-400 hover:underline flex items-center gap-1"
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>FastAPI Docs</span>
+              <span>FastAPI OpenAPI Spec</span>
             </a>
-            <span className="text-aerospace-700">•</span>
-            <span>VISION-PHM Flight Deck &copy; 2026</span>
+            <span className="text-slate-700">&bull;</span>
+            <span>VISION 2.0 Enterprise &copy; 2026</span>
           </div>
         </div>
       </footer>
