@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Play, Pause, RefreshCw, Plane, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Activity, Play, Pause, RefreshCw, Plane, ShieldCheck, AlertTriangle, Box } from 'lucide-react';
 
 interface NavbarProps {
   currentSubset: string;
@@ -11,8 +11,8 @@ interface NavbarProps {
   streamSpeed: number;
   onSpeedChange: (speed: number) => void;
   connectionStatus: 'connected' | 'reconnecting' | 'idle';
-  activeTab: 'cockpit' | 'fleet' | 'policy';
-  onTabChange: (tab: 'cockpit' | 'fleet' | 'policy') => void;
+  activeTab: 'cockpit' | 'digital-twin' | 'fleet' | 'policy';
+  onTabChange: (tab: 'cockpit' | 'digital-twin' | 'fleet' | 'policy') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -57,6 +57,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             Engine Cockpit
+          </button>
+          <button
+            onClick={() => onTabChange('digital-twin')}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'digital-twin'
+                ? 'bg-telemetry-cyan text-white shadow-sm'
+                : 'text-aerospace-400 hover:text-white hover:bg-aerospace-850'
+            }`}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>3D Digital Twin</span>
           </button>
           <button
             onClick={() => onTabChange('fleet')}

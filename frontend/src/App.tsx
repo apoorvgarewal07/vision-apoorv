@@ -6,8 +6,10 @@ import { GasPathPanel } from './components/GasPathPanel';
 import { SensorAttribution } from './components/SensorAttribution';
 import { FleetRiskTable } from './components/FleetRiskTable';
 import { PolicyLab } from './components/PolicyLab';
+import { TurbofanCanvas } from './components_3d/TurbofanCanvas';
+import { ComponentCardsGrid } from './components_3d/ComponentCardsGrid';
 import { TelemetryTick } from './types';
-import { ShieldCheck, Database, HardDrive, Terminal } from 'lucide-react';
+import { ShieldCheck, Database, HardDrive, Terminal, Box, LineChart } from 'lucide-react';
 
 const createDefaultTick = (unit: number, cycle: number = 20): TelemetryTick => ({
   unit,
@@ -67,7 +69,9 @@ export const App: React.FC = () => {
   const [streamSpeed, setStreamSpeed] = useState<number>(500);
   const [isStreaming, setIsStreaming] = useState<boolean>(true);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'idle'>('connected');
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'fleet' | 'policy'>('cockpit');
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'digital-twin' | 'fleet' | 'policy'>('cockpit');
+  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
+  const [cockpitViewMode, setCockpitViewMode] = useState<'chart' | '3d'>('chart');
 
   const [currentTick, setCurrentTick] = useState<TelemetryTick>(() => createDefaultTick(1, 20));
   const [history, setHistory] = useState<TelemetryTick[]>(() => createInitialHistory(1, 20));
@@ -180,10 +184,83 @@ export const App: React.FC = () => {
             {/* Top Gauges & Conformal Risk Banner */}
             <KpiDeck tick={currentTick} />
 
-            {/* Degradation Horizon & Conformal Envelope */}
-            <TrajectoryChart history={history} threshold={15} />
+            {/* View Mode Segmented Controls */}
+            <div className="flex items-center justify-between border-b border-aerospace-800 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                  Primary Telemetry View
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-aerospace-800 text-telemetry-cyan border border-aerospace-700">
+                  Unit #{currentUnit}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 bg-aerospace-900 p-1 rounded-lg border border-aerospace-800 text-xs">
+                <button
+                  onClick={() => setCockpitViewMode('chart')}
+                  className={`px-3 py-1 rounded font-medium transition-all flex items-center gap-1.5 ${
+                    cockpitViewMode === 'chart'
+                      ? 'bg-telemetry-cyan text-white shadow-sm font-semibold'
+                      : 'text-aerospace-400 hover:text-white hover:bg-aerospace-850'
+                  }`}
+                >
+                  <LineChart className="w-3.5 h-3.5" />
+                  <span>Degradation Curve</span>
+                </button>
+                <button
+                  onClick={() => setCockpitViewMode('3d')}
+                  className={`px-3 py-1 rounded font-medium transition-all flex items-center gap-1.5 ${
+                    cockpitViewMode === '3d'
+                      ? 'bg-telemetry-cyan text-white shadow-sm font-semibold'
+                      : 'text-aerospace-400 hover:text-white hover:bg-aerospace-850'
+                  }`}
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <span>3D Digital Twin</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Toggleable view: Trajectory Chart or 3D Engine */}
+            {cockpitViewMode === 'chart' ? (
+              <TrajectoryChart history={history} threshold={15} />
+            ) : (
+              <div className="space-y-4">
+                <TurbofanCanvas
+                  telemetryTick={currentTick}
+                  selectedComponentExternal={selectedComponent}
+                  onSelectComponentExternal={setSelectedComponent}
+                />
+              </div>
+            )}
 
             {/* Thermodynamics & Explainable Sensor Attributions */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <GasPathPanel tick={currentTick} />
+              <SensorAttribution tick={currentTick} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'digital-twin' && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Top Gauges & Conformal Risk Banner */}
+            <KpiDeck tick={currentTick} />
+
+            {/* Full 3D Digital Twin Stage */}
+            <TurbofanCanvas
+              telemetryTick={currentTick}
+              selectedComponentExternal={selectedComponent}
+              onSelectComponentExternal={setSelectedComponent}
+            />
+
+            {/* 6 Subsystem Inspection Cards Grid */}
+            <ComponentCardsGrid
+              selectedComponentId={selectedComponent}
+              onSelectComponent={setSelectedComponent}
+              telemetryTick={currentTick}
+            />
+
+            {/* Gas Path & Sensor Attributions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <GasPathPanel tick={currentTick} />
               <SensorAttribution tick={currentTick} />
