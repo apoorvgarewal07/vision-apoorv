@@ -1,0 +1,56 @@
+{
+  "subset": 1,
+  "n_train_engines": 100,
+  "n_test_engines": 100,
+  "rmse": 13.981703291073016,
+  "rmse_ci": [
+    11.648497210270051,
+    16.281080243694472
+  ],
+  "nasa": 306.6275680311631,
+  "oof_rmse": 13.171249967877216,
+  "coverage": {
+    "0.2": {
+      "nominal": 0.8,
+      "empirical": 0.74,
+      "mean_width": 30.39768774421652
+    },
+    "0.1": {
+      "nominal": 0.9,
+      "empirical": 0.83,
+      "mean_width": 38.132136713579186
+    },
+    "0.05": {
+      "nominal": 0.95,
+      "empirical": 0.96,
+      "mean_width": 48.56144195236874
+    }
+  },
+  "lower_bound_safe_frac": 0.89,
+  "thresholds": {
+    "fixed": {
+      "theta": 132,
+      "fail_rate": 0.01,
+      "cp_upper": 0.03833949749538697,
+      "mean_unused": 75.1010101010101
+    },
+    "point": {
+      "theta": 24,
+      "fail_rate": 0.01,
+      "cp_upper": 0.03833949749538697,
+      "mean_unused": 9.515151515151516
+    },
+    "lower": {
+      "theta": 18,
+      "fail_rate": 0.0,
+      "cp_upper": 0.022762779044189316,
+      "mean_unused": 9.93
+    },
+    "lower_persist3": {
+      "theta": 21,
+      "fail_rate": 0.01,
+      "cp_upper": 0.03833949749538697,
+      "mean_unused": 9.777777777777779
+    }
+  }
+}
