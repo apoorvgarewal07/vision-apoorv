@@ -9,6 +9,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'Low-Pressure Spool (N1)',
     zOffset: 4.8,
     explodedOffset: 7.5,
+    radius: 3.3,
     sensors: [
       { id: 's8', name: 'Nf (Physical Fan Speed)', unit: 'rpm', nominal: 2388.0 },
       { id: 's13', name: 'NRf (Corrected Fan Speed)', unit: 'rpm', nominal: 2388.0 },
@@ -22,6 +23,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'Low-Pressure Spool (N1)',
     zOffset: 2.6,
     explodedOffset: 4.5,
+    radius: 2.3,
     sensors: [
       { id: 's2', name: 'T24 (Total Temp at LPC Outlet)', unit: '°R', nominal: 642.0 }
     ],
@@ -33,6 +35,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'High-Pressure Spool (N2)',
     zOffset: 0.6,
     explodedOffset: 1.5,
+    radius: 1.9,
     sensors: [
       { id: 's3', name: 'T30 (Total Temp at HPC Outlet)', unit: '°R', nominal: 1588.0 },
       { id: 's7', name: 'P30 (Total Pressure at HPC Outlet)', unit: 'psia', nominal: 553.0 },
@@ -48,6 +51,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'Thermal Core Flowpath',
     zOffset: -1.4,
     explodedOffset: -1.5,
+    radius: 1.75,
     sensors: [
       { id: 's12', name: 'Phi (Fuel-Air Ratio)', unit: 'pps/psi', nominal: 521.8 },
       { id: 's16', name: 'farB (Burner Fuel-Air Ratio)', unit: 'ratio', nominal: 0.03 }
@@ -60,6 +64,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'High-Pressure Spool (N2)',
     zOffset: -2.8,
     explodedOffset: -4.0,
+    radius: 1.7,
     sensors: [
       { id: 's20', name: 'W31 (HPT Coolant Bleed Flow)', unit: 'lbm/s', nominal: 38.9 }
     ],
@@ -71,6 +76,7 @@ export const COMPONENT_METADATA = {
     subsystem: 'Low-Pressure Spool (N1)',
     zOffset: -4.5,
     explodedOffset: -7.0,
+    radius: 2.2,
     sensors: [
       { id: 's4', name: 'T50 (LPT Outlet Temp / EGT)', unit: '°R', nominal: 1405.0 },
       { id: 's21', name: 'W32 (LPT Coolant Bleed Flow)', unit: 'lbm/s', nominal: 23.35 }
@@ -127,3 +133,4 @@ export function computeComponentHealth(componentId, telemetryTick) {
       return { score: Math.round(hi * 100), status: 'Nominal', thermalDelta: 0 };
   }
 }
+

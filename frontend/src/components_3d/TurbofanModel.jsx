@@ -16,6 +16,37 @@ export class TurbofanModelController {
 
     this.scene.add(this.root);
 
+    // 3D Holographic Selection Reticle & Targeting Ring
+    this.targetReticle = new THREE.Group();
+    this.targetReticle.name = 'target_reticle';
+    this.targetReticle.userData = { isHalo: true };
+
+    const ringGeom = new THREE.TorusGeometry(1.0, 0.038, 16, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+    this.reticleRing = new THREE.Mesh(ringGeom, ringMat);
+    this.reticleRing.userData = { isHalo: true };
+    this.targetReticle.add(this.reticleRing);
+
+    // 4 Corner Tick Brackets for Aerospace HUD targeting aesthetic
+    const tickGeom = new THREE.BoxGeometry(0.1, 0.35, 0.04);
+    const tickMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2;
+      const tick = new THREE.Mesh(tickGeom, tickMat);
+      tick.position.set(Math.cos(angle) * 1.0, Math.sin(angle) * 1.0, 0);
+      tick.rotation.z = angle;
+      tick.userData = { isHalo: true };
+      this.targetReticle.add(tick);
+    }
+
+    this.targetReticle.visible = false;
+    this.scene.add(this.targetReticle);
+
     this.isExploded = false;
     this.isCutaway = true;
     this.rotationEnabled = true;
@@ -84,9 +115,34 @@ export class TurbofanModelController {
       telemetryTick,
       time
     });
+
+    // 4. Update 3D Holographic Targeting Reticle on Selected Component
+    if (selectedId && this.components[selectedId] && COMPONENT_METADATA[selectedId]) {
+      const comp = this.components[selectedId];
+      const meta = COMPONENT_METADATA[selectedId];
+      const targetRadius = (meta.radius || 2.0) * 1.18;
+
+      this.targetReticle.visible = true;
+      // Follow the component's exact Z position (including exploded view offsets)
+      this.targetReticle.position.z = comp.position.z;
+      this.targetReticle.position.x = comp.position.x;
+      this.targetReticle.position.y = comp.position.y;
+
+      // Scale reticle to match the component radius with a high-tech breathing pulse
+      const pulseScale = targetRadius * (1.0 + 0.035 * Math.sin(time * 6));
+      this.targetReticle.scale.set(pulseScale, pulseScale, pulseScale);
+
+      // Rotate slowly for live HUD tracking effect
+      this.targetReticle.rotation.z += delta * 1.4;
+    } else {
+      this.targetReticle.visible = false;
+    }
   }
 
   dispose() {
+    if (this.targetReticle) {
+      this.scene.remove(this.targetReticle);
+    }
     this.scene.remove(this.root);
     this.root.traverse((obj) => {
       if (obj.isMesh) {
@@ -99,3 +155,4 @@ export class TurbofanModelController {
     });
   }
 }
+

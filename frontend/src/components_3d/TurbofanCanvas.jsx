@@ -26,18 +26,43 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
   const [isCutaway, setIsCutaway] = useState(true);
   const [isRotating, setIsRotating] = useState(true);
 
-  // Sync external selection if provided
+  const selectedIdRef = useRef(selectedId);
+  const hoveredIdRef = useRef(hoveredId);
+  const telemetryTickRef = useRef(telemetryTick);
+  const isExplodedRef = useRef(isExploded);
+
   useEffect(() => {
-    if (selectedComponentExternal !== undefined) {
-      setSelectedId(selectedComponentExternal);
-    }
-  }, [selectedComponentExternal]);
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    hoveredIdRef.current = hoveredId;
+  }, [hoveredId]);
+
+  useEffect(() => {
+    telemetryTickRef.current = telemetryTick;
+  }, [telemetryTick]);
 
   const controllerRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const targetCamPosRef = useRef(null);
   const targetLookAtRef = useRef(null);
+
+  // Sync external selection if provided (e.g. from inspection cards grid)
+  useEffect(() => {
+    if (selectedComponentExternal !== undefined) {
+      setSelectedId(selectedComponentExternal);
+      selectedIdRef.current = selectedComponentExternal;
+
+      if (selectedComponentExternal && COMPONENT_METADATA[selectedComponentExternal]) {
+        const meta = COMPONENT_METADATA[selectedComponentExternal];
+        const z = isExplodedRef.current ? meta.explodedOffset : meta.zOffset;
+        targetLookAtRef.current = new THREE.Vector3(0, 0, z);
+        targetCamPosRef.current = new THREE.Vector3(7, 3, z + 5.5);
+      }
+    }
+  }, [selectedComponentExternal]);
 
   useEffect(() => {
     const currentMount = mountRef.current;
@@ -102,15 +127,20 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
     // 7. Raycasting Component Selector
     const selector = new ComponentSelector(camera, scene, renderer.domElement);
     selector.setCallbacks({
-      onHover: (id) => setHoveredId(id),
+      onHover: (id) => {
+        setHoveredId(id);
+        hoveredIdRef.current = id;
+      },
       onSelect: (id, hitPoint) => {
         setSelectedId(id);
+        selectedIdRef.current = id;
         if (onSelectComponentExternal) onSelectComponentExternal(id);
 
         if (id && COMPONENT_METADATA[id]) {
-          const z = COMPONENT_METADATA[id].zOffset;
+          const meta = COMPONENT_METADATA[id];
+          const z = isExplodedRef.current ? meta.explodedOffset : meta.zOffset;
           targetLookAtRef.current = new THREE.Vector3(0, 0, z);
-          targetCamPosRef.current = new THREE.Vector3(7, 3, z + 6);
+          targetCamPosRef.current = new THREE.Vector3(7, 3, z + 5.5);
         }
       }
     });
@@ -138,9 +168,9 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
       controls.update();
 
       controller.update({
-        selectedId,
-        hoveredId,
-        telemetryTick,
+        selectedId: selectedIdRef.current,
+        hoveredId: hoveredIdRef.current,
+        telemetryTick: telemetryTickRef.current,
         delta,
         time
       });
@@ -176,6 +206,7 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
 
   // Sync state changes with controller
   useEffect(() => {
+    isExplodedRef.current = isExploded;
     if (controllerRef.current) {
       controllerRef.current.setExploded(isExploded);
     }
@@ -195,17 +226,20 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
 
   const handleSelectComponent = (id) => {
     setSelectedId(id);
+    selectedIdRef.current = id;
     if (onSelectComponentExternal) onSelectComponentExternal(id);
 
     if (id && COMPONENT_METADATA[id] && controlsRef.current && cameraRef.current) {
-      const z = COMPONENT_METADATA[id].zOffset;
+      const meta = COMPONENT_METADATA[id];
+      const z = isExplodedRef.current ? meta.explodedOffset : meta.zOffset;
       targetLookAtRef.current = new THREE.Vector3(0, 0, z);
-      targetCamPosRef.current = new THREE.Vector3(7, 3, z + 6);
+      targetCamPosRef.current = new THREE.Vector3(7, 3, z + 5.5);
     }
   };
 
   const handleResetCamera = () => {
     setSelectedId(null);
+    selectedIdRef.current = null;
     if (onSelectComponentExternal) onSelectComponentExternal(null);
     targetLookAtRef.current = new THREE.Vector3(0, 0, 0);
     targetCamPosRef.current = new THREE.Vector3(11, 6, 12);
@@ -310,3 +344,4 @@ export const TurbofanCanvas = ({ telemetryTick, onSelectComponentExternal, selec
     </div>
   );
 };
+

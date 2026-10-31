@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Applies dynamic thermal heatmap coloring and selection glows to 3D turbofan meshes
+ * Applies dynamic thermal heatmap coloring and bright selection highlights to 3D turbofan meshes
  */
 export function updateComponentGlows(components, { selectedId, hoveredId, telemetryTick, time = 0 }) {
   if (!components) return;
@@ -41,27 +41,48 @@ export function updateComponentGlows(components, { selectedId, hoveredId, teleme
     }
 
     group.traverse((child) => {
-      if (child.isMesh && child.material && !child.userData.isCasing) {
+      if (child.isMesh && child.material && !child.userData.isCasing && !child.userData.isHalo) {
         const mat = child.material;
 
+        // Cache original base color, roughness and metalness
+        if (child.userData.origColorHex === undefined) {
+          child.userData.origColorHex = mat.color.getHex();
+        }
+        if (child.userData.origRoughness === undefined) {
+          child.userData.origRoughness = mat.roughness;
+        }
+
         if (isSelected) {
-          // Focused Component Glow: high-tech sky cyan
-          mat.emissive.setHex(0x38bdf8);
-          mat.emissiveIntensity = 0.55;
+          // PROMINENT CLICK HIGHLIGHT:
+          // Pulsing electric cyan emissive glow
+          const pulse = 0.8 + 0.25 * Math.sin(time * 7);
+          mat.emissive.setHex(0x00e5ff); // Vivid electric cyan
+          mat.emissiveIntensity = 0.95 * pulse;
+          
+          // Tint diffuse color to glowing sky cyan for high visibility
+          mat.color.setHex(0x7dd3fc);
+          mat.roughness = 0.18;
         } else if (isHovered) {
-          // Hover outline pulse
-          mat.emissive.setHex(0x0ea5e9);
-          mat.emissiveIntensity = 0.35;
+          // Hover preview highlight
+          mat.emissive.setHex(0x0284c7);
+          mat.emissiveIntensity = 0.5;
+          mat.color.setHex(child.userData.origColorHex);
+          mat.roughness = child.userData.origRoughness;
         } else if (thermalColor) {
           // Real-time thermal telemetry degradation
           mat.emissive.copy(thermalColor);
           mat.emissiveIntensity = thermalIntensity;
+          mat.color.setHex(child.userData.origColorHex);
+          mat.roughness = child.userData.origRoughness;
         } else {
           // Nominal baseline
           mat.emissive.setHex(0x000000);
           mat.emissiveIntensity = 0.0;
+          mat.color.setHex(child.userData.origColorHex);
+          mat.roughness = child.userData.origRoughness;
         }
       }
     });
   });
 }
+

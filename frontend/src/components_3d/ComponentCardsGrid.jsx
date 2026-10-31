@@ -96,3 +96,4 @@ export const ComponentCardsGrid = ({ selectedComponentId, onSelectComponent, tel
     </div>
   );
 };
+

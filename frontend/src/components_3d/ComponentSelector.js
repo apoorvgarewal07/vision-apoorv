@@ -39,13 +39,18 @@ export class ComponentSelector {
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const intersects = this.raycaster.intersectObjects(this.scene.children, true);
 
+    const validModules = new Set(['fan', 'lpc', 'hpc', 'combustor', 'hpt', 'lpt']);
+
     for (const hit of intersects) {
       let cur = hit.object;
-      // Skip translucent outer glass casing unless explicitly clicking empty space
-      if (cur.userData && cur.userData.isCasing) continue;
+      // Skip outer glass casing, struts, selection halo, and background helpers
+      if (cur.userData && (cur.userData.isCasing || cur.userData.componentId === 'casing' || cur.userData.isHalo)) {
+        continue;
+      }
 
       while (cur) {
-        if (cur.userData && cur.userData.componentId) {
+        if (cur.userData && (cur.userData.isCasing || cur.userData.isHalo)) break;
+        if (cur.userData && validModules.has(cur.userData.componentId)) {
           return { componentId: cur.userData.componentId, hitPoint: hit.point, object: cur };
         }
         cur = cur.parent;
@@ -84,3 +89,4 @@ export class ComponentSelector {
     this.domElement.removeEventListener('click', this._onPointerClick);
   }
 }
+

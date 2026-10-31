@@ -91,3 +91,4 @@ export function createComponentMaterial(type, options = {}) {
 
   return mat;
 }
+

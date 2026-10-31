@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { baseMaterials } from './materials.js';
+import { baseMaterials, createComponentMaterial } from './materials.js';
 import { COMPONENT_METADATA } from '../utils/componentSensorMap.js';
 
 /**
@@ -17,13 +17,14 @@ export function createFan(customMat = null) {
   fanGroup.name = 'fan_assembly';
   fanGroup.userData = { componentId: 'fan', spool: 'N1', baseZ: COMPONENT_METADATA.fan.zOffset };
 
-  const mat = customMat || baseMaterials.titanium;
+  const mat = customMat || createComponentMaterial('titanium', { color: 0x94a3b8 });
+  const spinnerMat = createComponentMaterial('spinner');
 
   // Central Spinner Nose Cone
   const spinnerGeom = new THREE.ConeGeometry(0.85, 2.2, 32);
   spinnerGeom.rotateX(Math.PI / 2); // Point forward along +Z
   spinnerGeom.translate(0, 0, 1.1);
-  const spinnerMesh = new THREE.Mesh(spinnerGeom, baseMaterials.spinner);
+  const spinnerMesh = new THREE.Mesh(spinnerGeom, spinnerMat);
   spinnerMesh.userData = { componentId: 'fan' };
   fanGroup.add(spinnerMesh);
 
@@ -64,7 +65,8 @@ export function createLPC(customMat = null) {
   lpcGroup.name = 'lpc_assembly';
   lpcGroup.userData = { componentId: 'lpc', spool: 'N1', baseZ: COMPONENT_METADATA.lpc.zOffset };
 
-  const mat = customMat || baseMaterials.titanium;
+  const mat = customMat || createComponentMaterial('titanium', { color: 0x8ba2b9 });
+  const shaftMat = createComponentMaterial('shaft');
   const stages = [
     { radius: 1.9, length: 0.35, z: 0.45, blades: 28 },
     { radius: 1.75, length: 0.35, z: 0.0, blades: 32 },
@@ -74,7 +76,7 @@ export function createLPC(customMat = null) {
   // Core Central Shaft
   const shaftGeom = new THREE.CylinderGeometry(0.5, 0.5, 1.4, 24);
   shaftGeom.rotateX(Math.PI / 2);
-  const shaft = new THREE.Mesh(shaftGeom, baseMaterials.shaft);
+  const shaft = new THREE.Mesh(shaftGeom, shaftMat);
   shaft.userData = { componentId: 'lpc' };
   lpcGroup.add(shaft);
 
@@ -117,12 +119,13 @@ export function createHPC(customMat = null) {
   hpcGroup.name = 'hpc_assembly';
   hpcGroup.userData = { componentId: 'hpc', spool: 'N2', baseZ: COMPONENT_METADATA.hpc.zOffset };
 
-  const mat = customMat || baseMaterials.titanium;
+  const mat = customMat || createComponentMaterial('titanium', { color: 0x7c94ac });
+  const drumMat = createComponentMaterial('titanium', { color: 0x6e849b });
 
   // Heavy Tapered Compressor Spool Drum
   const drumGeom = new THREE.CylinderGeometry(0.65, 0.8, 2.2, 32);
   drumGeom.rotateX(Math.PI / 2);
-  const drum = new THREE.Mesh(drumGeom, mat);
+  const drum = new THREE.Mesh(drumGeom, drumMat);
   drum.userData = { componentId: 'hpc' };
   hpcGroup.add(drum);
 
@@ -172,7 +175,8 @@ export function createCombustor(customMat = null) {
   combustorGroup.name = 'combustor_assembly';
   combustorGroup.userData = { componentId: 'combustor', spool: 'Static', baseZ: COMPONENT_METADATA.combustor.zOffset };
 
-  const mat = customMat || baseMaterials.combustor;
+  const mat = customMat || createComponentMaterial('combustor', { color: 0x64748b });
+  const nozzleMat = createComponentMaterial('copperBrass');
 
   // Outer Annular Flame Casing
   const outerGeom = new THREE.CylinderGeometry(1.42, 1.42, 1.35, 32, 1, true);
@@ -196,7 +200,7 @@ export function createCombustor(customMat = null) {
   for (let i = 0; i < nozzleCount; i++) {
     const angle = (i / nozzleCount) * Math.PI * 2;
     const r = 1.05;
-    const nozzle = new THREE.Mesh(nozzleGeom, baseMaterials.copperBrass);
+    const nozzle = new THREE.Mesh(nozzleGeom, nozzleMat);
     nozzle.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0.6);
     nozzle.userData = { componentId: 'combustor' };
     combustorGroup.add(nozzle);
@@ -222,7 +226,7 @@ export function createHPT(customMat = null) {
   hptGroup.name = 'hpt_assembly';
   hptGroup.userData = { componentId: 'hpt', spool: 'N2', baseZ: COMPONENT_METADATA.hpt.zOffset };
 
-  const mat = customMat || baseMaterials.turbine;
+  const mat = customMat || createComponentMaterial('turbine', { color: 0x5a6a80 });
 
   // Central Disc Hub
   const hubGeom = new THREE.CylinderGeometry(0.7, 0.7, 0.75, 24);
@@ -266,12 +270,14 @@ export function createLPT(customMat = null) {
   lptGroup.name = 'lpt_assembly';
   lptGroup.userData = { componentId: 'lpt', spool: 'N1', baseZ: COMPONENT_METADATA.lpt.zOffset };
 
-  const mat = customMat || baseMaterials.turbine;
+  const mat = customMat || createComponentMaterial('turbine', { color: 0x4f5e73 });
+  const shaftMat = createComponentMaterial('shaft');
+  const plugMat = createComponentMaterial('casingMetal');
 
   // Expanding Exhaust Shaft Cone
   const shaftGeom = new THREE.CylinderGeometry(0.65, 0.45, 1.8, 24);
   shaftGeom.rotateX(Math.PI / 2);
-  const shaft = new THREE.Mesh(shaftGeom, baseMaterials.shaft);
+  const shaft = new THREE.Mesh(shaftGeom, shaftMat);
   shaft.userData = { componentId: 'lpt' };
   lptGroup.add(shaft);
 
@@ -303,7 +309,7 @@ export function createLPT(customMat = null) {
   const tailPlugGeom = new THREE.ConeGeometry(0.48, 1.6, 24);
   tailPlugGeom.rotateX(-Math.PI / 2);
   tailPlugGeom.translate(0, 0, -1.65);
-  const tailPlug = new THREE.Mesh(tailPlugGeom, baseMaterials.casingMetal);
+  const tailPlug = new THREE.Mesh(tailPlugGeom, plugMat);
   tailPlug.userData = { componentId: 'lpt' };
   lptGroup.add(tailPlug);
 
@@ -320,14 +326,17 @@ export function createCasing(isCutaway = true) {
   casingGroup.name = 'casing_assembly';
   casingGroup.userData = { componentId: 'casing', isCasing: true };
 
+  const glassMat = createComponentMaterial('casingGlass');
+  const metalMat = createComponentMaterial('casingMetal');
+
   // Forward Intake Lip Cowl Ring
   const intakeRingGeom = new THREE.TorusGeometry(3.4, 0.16, 16, 48);
-  const intakeRing = new THREE.Mesh(intakeRingGeom, baseMaterials.casingMetal);
+  const intakeRing = new THREE.Mesh(intakeRingGeom, metalMat);
   intakeRing.position.z = 5.2;
+  intakeRing.userData = { isCasing: true, componentId: 'casing' };
   casingGroup.add(intakeRing);
 
   // Outer Nacelle Cowling Shell
-  // In cutaway mode, thetaLength is Math.PI * 1.35 to leave an open inspection window
   const thetaLength = isCutaway ? Math.PI * 1.25 : Math.PI * 2;
   const thetaStart = isCutaway ? Math.PI * 0.85 : 0;
 
@@ -335,24 +344,26 @@ export function createCasing(isCutaway = true) {
   cowlGeom.rotateX(Math.PI / 2);
   cowlGeom.translate(0, 0, -0.2);
 
-  const cowlMesh = new THREE.Mesh(cowlGeom, baseMaterials.casingGlass);
-  cowlMesh.userData = { isCasing: true };
+  const cowlMesh = new THREE.Mesh(cowlGeom, glassMat);
+  cowlMesh.userData = { isCasing: true, componentId: 'casing' };
   casingGroup.add(cowlMesh);
 
   // 4 Radial Structural Support Struts
   const strutGeom = new THREE.BoxGeometry(0.12, 1.5, 0.4);
   for (let i = 0; i < 4; i++) {
     const angle = (i * Math.PI) / 2;
-    const strut = new THREE.Mesh(strutGeom, baseMaterials.casingMetal);
+    const strut = new THREE.Mesh(strutGeom, metalMat);
     strut.position.set(Math.cos(angle) * 2.3, Math.sin(angle) * 2.3, 3.2);
     strut.rotation.z = angle - Math.PI / 2;
+    strut.userData = { isCasing: true, componentId: 'casing' };
     casingGroup.add(strut);
   }
 
   // Exhaust Nozzle Rear Rim
   const nozzleRingGeom = new THREE.TorusGeometry(2.55, 0.12, 16, 48);
-  const nozzleRing = new THREE.Mesh(nozzleRingGeom, baseMaterials.casingMetal);
+  const nozzleRing = new THREE.Mesh(nozzleRingGeom, metalMat);
   nozzleRing.position.z = -5.8;
+  nozzleRing.userData = { isCasing: true, componentId: 'casing' };
   casingGroup.add(nozzleRing);
 
   return casingGroup;
@@ -396,3 +407,4 @@ export function buildCompleteEngine(options = {}) {
     spoolN2: [hpc, hpt]       // High-pressure rotating spool
   };
 }
+
