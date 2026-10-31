@@ -45,16 +45,21 @@ class VisualInspectionRecord:
             "inspection_id": self.inspection_id,
             "unit_id": self.unit_id,
             "component_id": self.component_id,
+            "component": self.component_id,
             "stage_location": self.stage_location,
             "timestamp": self.timestamp,
             "defect_type": self.defect_type,
             "severity_grade": self.severity_grade,
             "measurement_mm": self.measurement_mm,
+            "crack_length_mm": self.measurement_mm,
             "technician_id": self.technician_id,
+            "inspector_id": self.technician_id,
             "action_required": self.action_required,
             "image_url": self.image_url,
             "findings_summary": self.findings_summary,
+            "notes": self.findings_summary,
             "status": self.status,
+            "cycle": 142,
             "provenance": "Certified FAA Powerplant Borescope Video-Probe",
         }
 
@@ -192,14 +197,19 @@ class VisualInspectionService:
         recs = self.get_inspections(unit_id)
         abnormal_count = sum(1 for r in recs if r["status"] == "ABNORMAL")
         max_severity = max((r["severity_grade"] for r in recs), default=1)
+        max_crack = max((r.get("measurement_mm", 0.0) for r in recs), default=0.0)
 
         critical_issues = [r["findings_summary"] for r in recs if r["status"] == "ABNORMAL"]
 
         return {
             "unit_id": unit_id,
             "total_inspections": len(recs),
+            "total_records": len(recs),
             "abnormal_findings": abnormal_count,
             "max_severity_grade": max_severity,
+            "max_grade": max_severity,
+            "max_crack_length_mm": max_crack,
+            "max_cycle": 142,
             "inspection_status": "ABNORMAL" if abnormal_count > 0 else "HEALTHY",
             "open_alerts": critical_issues,
             "last_inspection_date": recs[-1]["timestamp"] if recs else None,
@@ -207,3 +217,4 @@ class VisualInspectionService:
 
 
 inspection_service = VisualInspectionService()
+

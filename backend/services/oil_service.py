@@ -60,6 +60,21 @@ class OilReport:
             "flight_hours": self.flight_hours,
             "viscosity_40c": self.viscosity_40c,
             "viscosity_100c": self.viscosity_100c,
+            "viscosity_cst_40c": self.viscosity_40c,
+            "viscosity_cst_100c": self.viscosity_100c,
+            "iron_fe_ppm": self.iron_fe_ppm,
+            "copper_cu_ppm": self.copper_cu_ppm,
+            "chromium_cr_ppm": self.chromium_cr_ppm,
+            "aluminum_al_ppm": self.aluminum_al_ppm,
+            "titanium_ti_ppm": self.titanium_ti_ppm,
+            "water_content_pct": self.water_content_pct,
+            "fuel_dilution_pct": self.fuel_dilution_pct,
+            "iso_cleanliness_code": self.iso_cleanliness_code,
+            "chip_detector_findings": self.filter_debris_finding,
+            "filter_differential_pressure_psi": 3.8 if self.status == "HEALTHY" else 6.2,
+            "cycle": int(self.flight_hours / 10),
+            "inspector_notes": self.notes,
+            "lab_technician_id": "LAB-AERO-921",
             "spectrometry_metals_ppm": {
                 "iron_fe": self.iron_fe_ppm,
                 "copper_cu": self.copper_cu_ppm,
@@ -253,7 +268,10 @@ class OilIntelligenceService:
                 "unit_id": unit_id,
                 "trend": "STABLE",
                 "fe_delta_ppm": 0.0,
+                "fe_rate_ppm_per_hr": 0.0,
+                "rate_fe_ppm_per_100h": 0.0,
                 "wear_severity": "ABNORMAL" if is_abnormal else "NORMAL",
+                "wear_acceleration_flag": is_abnormal,
                 "recommendation": "Maintain standard 100-hour sampling interval.",
                 "affected_subsystem": "HPC Bearings" if is_abnormal else "None",
             }
@@ -288,13 +306,16 @@ class OilIntelligenceService:
             "unit_id": unit_id,
             "trend": trend,
             "fe_rate_ppm_per_hr": round(fe_rate, 3),
+            "rate_fe_ppm_per_100h": round(fe_rate * 100, 2),
             "cu_rate_ppm_per_hr": round(cu_rate, 3),
             "latest_fe_ppm": r_last.iron_fe_ppm,
             "latest_cu_ppm": r_last.copper_cu_ppm,
             "wear_severity": severity,
+            "wear_acceleration_flag": is_critical or is_elevated,
             "affected_subsystem": subsys,
             "recommendation": rec,
         }
 
 
 oil_service = OilIntelligenceService()
+

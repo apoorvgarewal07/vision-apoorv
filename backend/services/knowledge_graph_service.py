@@ -172,3 +172,4 @@ class AircraftKnowledgeGraph:
 
 
 knowledge_graph_service = AircraftKnowledgeGraph()
+

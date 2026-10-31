@@ -41,15 +41,21 @@ class MaintenanceLogEntry:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "log_id": self.log_id,
+            "order_id": self.log_id,
             "unit_id": self.unit_id,
             "timestamp": self.timestamp,
             "flight_hours": self.flight_hours,
+            "cycle": int(self.flight_hours / 10),
             "ata_chapter": self.ata_chapter,
             "action_type": self.action_type,
+            "action_taken": self.action_type,
             "component_affected": self.component_affected,
             "work_description": self.work_description,
+            "description": self.work_description,
             "cost_usd": self.cost_usd,
             "technician_signature": self.technician_signature,
+            "technician_id": self.technician_signature,
+            "status": "COMPLETED",
             "document_reference": self.document_reference,
             "fault_code": self.fault_code,
             "provenance": "MRO Digital Technical Logbook (CAMP / AMOS Compatible)",
@@ -200,7 +206,13 @@ class MaintenanceHistoryService:
                 component_counts[comp] = component_counts.get(comp, 0) + 1
 
         repeated_faults = [
-            {"fault_code": code, "occurrences": count, "description": f"Chronic repeat: {count} times"}
+            {
+                "fault_code": code,
+                "ata_chapter": "72-30" if "HPC" in code else "72-00",
+                "occurrences": count,
+                "cycle_span": 60,
+                "description": f"Chronic repeat: {count} times",
+            }
             for code, count in fault_counts.items()
             if count >= 2
         ]
@@ -222,3 +234,4 @@ class MaintenanceHistoryService:
 
 
 maintenance_service = MaintenanceHistoryService()
+

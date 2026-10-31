@@ -190,49 +190,107 @@ class AircraftSystemsService:
     def get_aircraft_status(self, unit_id: int) -> Dict[str, Any]:
         """Retrieve complete multi-subsystem, operational, and structural report."""
         if unit_id in self._systems_cache:
-            return self._systems_cache[unit_id]
+            raw = dict(self._systems_cache[unit_id])
+        else:
+            raw = {
+                "aircraft_tail": f"N{unit_id + 700:03d}VA",
+                "aircraft_model": "Commercial Narrowbody Airliner",
+                "unit_id": unit_id,
+                "flight_operations": {
+                    "total_flight_hours": round(1000.0 + (unit_id * 32.5), 1),
+                    "total_flight_cycles": 600 + (unit_id * 20),
+                    "flight_hour_cycle_ratio": 1.55,
+                    "average_stage_length_nm": 600,
+                    "environmental_exposure": {
+                        "desert_sand_ingestion_index": "MODERATE",
+                        "marine_salt_air_index": "MODERATE",
+                        "high_altitude_cold_hours": 800.0,
+                    },
+                    "last_flight": {
+                        "origin": "KJFK (New York JFK)",
+                        "destination": "KMIA (Miami Intl)",
+                        "flight_duration_hrs": 3.1,
+                        "cruise_altitude_ft": 35000,
+                        "cruise_mach": 0.78,
+                    },
+                },
+                "subsystems": {
+                    "fuel_system": {"status": "HEALTHY", "flow_rate_pph": 2500.0, "filter_delta_p_psi": 2.4, "boost_pump_pressure_psi": 47.0},
+                    "hydraulic_system": {"status": "HEALTHY", "system_pressure_psi": 3000.0, "fluid_temperature_c": 66.0, "reservoir_level_pct": 90.0},
+                    "electrical_system": {"status": "HEALTHY", "idg_generator_load_pct": 55.0, "ac_bus_voltage_v": 115.0, "ac_frequency_hz": 400.0},
+                    "battery_system": {"status": "HEALTHY", "state_of_charge_pct": 95.0, "cell_temperature_c": 23.0},
+                    "apu_auxiliary_power": {"status": "HEALTHY", "rpm_pct": 100.0, "egt_exhaust_temp_c": 590.0, "bleed_air_pressure_psi": 44.0},
+                    "environmental_control_ecs": {"status": "HEALTHY", "pack_1_discharge_temp_c": 16.5, "cabin_delta_pressure_psi": 8.1},
+                    "landing_gear": {"status": "HEALTHY", "main_gear_brake_temp_c": 190.0, "tire_pressure_psi": 202.0},
+                },
+                "structural_health": {
+                    "airframe_fatigue_index": round(0.15 + (unit_id * 0.005), 3),
+                    "wing_root_stress_cycles": 600 + (unit_id * 20),
+                    "fuselage_pressurization_cycles": 600 + (unit_id * 20),
+                    "corrosion_severity_class": "CLASS_0 (Negligible)",
+                    "ndi_ultrasonic_inspection_due_in_cycles": max(100, 1500 - (unit_id * 20)),
+                    "composite_delamination_findings": "None",
+                },
+            }
 
-        # Dynamically generate synthesized profile for other engines
-        return {
-            "aircraft_tail": f"N{unit_id + 700:03d}VA",
-            "aircraft_model": "Commercial Narrowbody Airliner",
-            "unit_id": unit_id,
-            "flight_operations": {
-                "total_flight_hours": round(1000.0 + (unit_id * 32.5), 1),
-                "total_flight_cycles": 600 + (unit_id * 20),
-                "flight_hour_cycle_ratio": 1.55,
-                "average_stage_length_nm": 600,
-                "environmental_exposure": {
-                    "desert_sand_ingestion_index": "MODERATE",
-                    "marine_salt_air_index": "MODERATE",
-                    "high_altitude_cold_hours": 800.0,
-                },
-                "last_flight": {
-                    "origin": "KJFK (New York JFK)",
-                    "destination": "KMIA (Miami Intl)",
-                    "flight_duration_hrs": 3.1,
-                    "cruise_altitude_ft": 35000,
-                    "cruise_mach": 0.78,
-                },
-            },
-            "subsystems": {
-                "fuel_system": {"status": "HEALTHY", "flow_rate_pph": 2500.0, "filter_delta_p_psi": 2.4, "boost_pump_pressure_psi": 47.0},
-                "hydraulic_system": {"status": "HEALTHY", "system_pressure_psi": 3000.0, "fluid_temperature_c": 66.0, "reservoir_level_pct": 90.0},
-                "electrical_system": {"status": "HEALTHY", "idg_generator_load_pct": 55.0, "ac_bus_voltage_v": 115.0, "ac_frequency_hz": 400.0},
-                "battery_system": {"status": "HEALTHY", "state_of_charge_pct": 95.0, "cell_temperature_c": 23.0},
-                "apu_auxiliary_power": {"status": "HEALTHY", "rpm_pct": 100.0, "egt_exhaust_temp_c": 590.0, "bleed_air_pressure_psi": 44.0},
-                "environmental_control_ecs": {"status": "HEALTHY", "pack_1_discharge_temp_c": 16.5, "cabin_delta_pressure_psi": 8.1},
-                "landing_gear": {"status": "HEALTHY", "main_gear_brake_temp_c": 190.0, "tire_pressure_psi": 202.0},
-            },
-            "structural_health": {
-                "airframe_fatigue_index": round(0.15 + (unit_id * 0.005), 3),
-                "wing_root_stress_cycles": 600 + (unit_id * 20),
-                "fuselage_pressurization_cycles": 600 + (unit_id * 20),
-                "corrosion_severity_class": "CLASS_0 (Negligible)",
-                "ndi_ultrasonic_inspection_due_in_cycles": max(100, 1500 - (unit_id * 20)),
-                "composite_delamination_findings": "None",
-            },
-        }
+        # Normalize and enrich subsystems with aliases for full frontend compatibility
+        sub = raw.get("subsystems", {})
+        fuel = sub.get("fuel_system", {})
+        hyd = sub.get("hydraulic_system", {})
+        elec = sub.get("electrical_system", {})
+        bat = sub.get("battery_system", {})
+        apu = sub.get("apu_auxiliary_power", {})
+        ecs = sub.get("environmental_control_ecs", {})
+        gear = sub.get("landing_gear", {})
+
+        fuel["fuel_temperature_c"] = fuel.get("fuel_temperature_c", 28.0)
+        fuel["filter_differential_pressure_psi"] = fuel.get("filter_delta_p_psi", 2.4)
+        fuel["boost_pump_pressure_psi"] = fuel.get("boost_pump_pressure_psi", 47.0)
+
+        hyd["system_a_pressure_psi"] = hyd.get("system_pressure_psi", 3000.0)
+        hyd["system_b_pressure_psi"] = 2980.0
+        hyd["reservoir_quantity_pct"] = hyd.get("reservoir_level_pct", 92.0)
+
+        elec["idg1_load_pct"] = elec.get("idg_generator_load_pct", 55.0)
+        elec["idg2_load_pct"] = 52.0
+        elec["battery_state_of_health_pct"] = bat.get("state_of_charge_pct", 98.0)
+
+        apu["egt_c"] = apu.get("egt_exhaust_temp_c", 590.0)
+        apu["running_hours"] = apu.get("starts_counter", 1420) * 2
+
+        gear["brake_wear_pin_mm"] = 3.2
+        gear["tire_pressure_psi"] = gear.get("tire_pressure_psi", 200.0)
+
+        ecs["pack_1_temp_c"] = ecs.get("pack_1_discharge_temp_c", 16.5)
+        ecs["cabin_delta_pressure_psi"] = ecs.get("cabin_delta_pressure_psi", 8.1)
+
+        sub["fuel"] = fuel
+        sub["hydraulics"] = hyd
+        sub["electrical"] = elec
+        sub["battery"] = bat
+        sub["apu"] = apu
+        sub["environmental_control"] = ecs
+
+        # Flight operations normalization
+        fops = raw.get("flight_operations", {})
+        fops["cumulative_flight_hours"] = fops.get("total_flight_hours", 1850.0)
+        fops["cumulative_flight_cycles"] = fops.get("total_flight_cycles", 1120)
+        fops["engine_flight_hours"] = round(fops.get("total_flight_hours", 1850.0) * 0.94, 1)
+        fops["environmental_exposure_index"] = 0.65
+        fops["environmental_notes"] = "Moderate coastal marine salinity / humidity"
+
+        # Structural health / airframe fatigue normalization
+        struct = raw.get("structural_health", {})
+        fatigue = dict(struct)
+        fatigue["cumulative_fatigue_damage_d"] = struct.get("airframe_fatigue_index", 0.22)
+        fatigue["remaining_safe_cycles"] = struct.get("ndi_ultrasonic_inspection_due_in_cycles", 950)
+
+        raw["airframe_fatigue"] = fatigue
+        raw["subsystems"] = sub
+        raw["flight_operations"] = fops
+
+        return raw
 
 
 aircraft_systems_service = AircraftSystemsService()
+

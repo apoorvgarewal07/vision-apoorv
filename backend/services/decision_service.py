@@ -159,3 +159,4 @@ class EconomicDecisionService:
 
 
 decision_service = EconomicDecisionService()
+

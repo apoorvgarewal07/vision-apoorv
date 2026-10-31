@@ -170,3 +170,4 @@ export default function ScientificIntegrityCard({ isOpen, onClose }) {
     </div>
   );
 }
+

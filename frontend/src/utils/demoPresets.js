@@ -92,3 +92,4 @@ export const DEMO_PRESETS = [
     badgeColor: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50',
   },
 ];
+

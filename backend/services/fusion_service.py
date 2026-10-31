@@ -269,19 +269,56 @@ class MultimodalFusionEngine:
                 "supporting_evidence": "Airframe systems data bus reporting elevated back-pressures or electrical load imbalance.",
             })
 
+        # Format priorities for frontend compatibility
+        formatted_priorities = []
+        for p in priorities:
+            formatted_priorities.append({
+                "rank": p["rank"],
+                "priority": p["rank"],
+                "subsystem": p["subsystem"],
+                "target_subsystem": p["subsystem"],
+                "recommended_action": p["recommended_action"],
+                "urgency": p["urgency"],
+                "supporting_evidence": p["supporting_evidence"],
+                "evidence_drivers": p["supporting_evidence"],
+                "action_window": "Next Scheduled C-Check" if p["urgency"] != "IMMEDIATE" else "Immediate (AOG)",
+            })
+
+        # Enrich component scores with tokens and primary issues
+        matrix_scores = {}
+        for k, v in component_scores.items():
+            tok = "HEALTHY" if v["score"] > 70 else ("ABNORMAL" if v["score"] < 40 else "NOT_INSPECTED")
+            matrix_scores[k] = {
+                "name": v["name"],
+                "score": v["score"],
+                "status": v["status"],
+                "token": tok,
+                "primary_issue": f"{v['score']}% Health" if tok == "HEALTHY" else "Degradation Warning",
+            }
+
         return {
             "unit_id": unit_id,
             "aircraft_tail": systems_data.get("aircraft_tail", f"N{unit_id:03d}VA"),
             "timestamp": now_ts,
-            "airworthiness_verdict": unified_verdict,
+            "airworthiness_verdict": {
+                "status": unified_verdict,
+                "classification": "CERTIFIED AIRWORTHINESS STANDARD",
+                "badge": verdict_badge,
+                "confidence_score": 0.94 if unified_verdict.startswith("AIRWORTHY") else 0.82,
+                "dispatch_action": "GO" if unified_verdict.startswith("AIRWORTHY") else ("MEL DISPATCH" if "ADVISORY" in unified_verdict else "NO-GO (AOG)"),
+                "rationale": verdict_desc,
+            },
+            "airworthiness_verdict_str": unified_verdict,
             "verdict_badge": verdict_badge,
             "verdict_description": verdict_desc,
             "action_code": action_code,
             "abnormal_channels_count": abnormal_channels_count,
             "total_channels_evaluated": len(evidence_list),
             "evidence_breakdown": evidence_list,
-            "component_health_scores": component_scores,
-            "ranked_inspection_priorities": priorities,
+            "evidence_channels": evidence_list,
+            "component_health_scores": matrix_scores,
+            "component_health_matrix": matrix_scores,
+            "ranked_inspection_priorities": formatted_priorities,
             "flight_operations_summary": flight_ops,
             "structural_health_summary": structural,
         }

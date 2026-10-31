@@ -138,7 +138,8 @@ def test_multimodal_fusion_service():
     assert "ranked_inspection_priorities" in fusion
 
     verdict = fusion["airworthiness_verdict"]
-    assert "AIRWORTHY" in verdict or "ADVISORY" in verdict or "AOG" in verdict
+    verdict_str = verdict["status"] if isinstance(verdict, dict) else str(verdict)
+    assert any(term in verdict_str for term in ["AIRWORTHY", "ADVISORY", "AOG"])
 
     # Ensure evidence channels are synthesized
     assert fusion["total_channels_evaluated"] == 8

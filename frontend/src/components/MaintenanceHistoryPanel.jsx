@@ -51,7 +51,7 @@ export default function MaintenanceHistoryPanel({
 
   const fetchHistory = () => {
     setLoading(true);
-    fetch(`http://localhost:8000/api/v1/maintenance/${unitId}`)
+    fetch(`/api/v1/maintenance/${unitId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch maintenance history');
         return res.json();
@@ -72,7 +72,7 @@ export default function MaintenanceHistoryPanel({
 
   const handleCreateLog = (e) => {
     e.preventDefault();
-    fetch(`http://localhost:8000/api/v1/maintenance/${unitId}`, {
+    fetch(`/api/v1/maintenance/${unitId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -90,7 +90,9 @@ export default function MaintenanceHistoryPanel({
   };
 
   const logs = data?.logs || [];
-  const repeatedFaults = data?.repeated_faults || [];
+  const repeatedFaults = Array.isArray(data?.repeated_faults)
+    ? data.repeated_faults
+    : (data?.repeated_faults?.repeated_fault_list || data?.summary?.repeated_fault_list || []);
   const totalCost = logs.reduce((acc, log) => acc + (log.cost_usd || 0), 0);
 
   return (
@@ -250,17 +252,17 @@ export default function MaintenanceHistoryPanel({
                       ATA {log.ata_chapter}
                     </span>
                     <span className="text-white font-bold">
-                      {log.order_id || `WO-2024-${1000 + idx}`}
+                      {log.order_id || log.log_id || `WO-2024-${1000 + idx}`}
                     </span>
                     <span className="text-slate-400 text-[11px]">
-                      &bull; Cycle {log.cycle}
+                      &bull; Cycle {log.cycle || Math.round((log.flight_hours || 1000) / 10)}
                     </span>
                   </div>
                   <div className="text-slate-300 font-sans font-medium">
-                    {log.description}
+                    {log.description || log.work_description || 'Routine maintenance'}
                   </div>
                   <div className="text-[11px] text-slate-400 font-sans">
-                    Action: <span className="text-slate-300">{log.action_taken}</span>
+                    Action: <span className="text-slate-300">{log.action_taken || log.action_type || 'Inspected and signed off'}</span>
                   </div>
                 </div>
 
@@ -269,7 +271,7 @@ export default function MaintenanceHistoryPanel({
                     ${(log.cost_usd || 0).toLocaleString('en-US')}
                   </span>
                   <span className="text-slate-400">
-                    Tech: {log.technician_id || 'CERT-A&P-550'}
+                    Tech: {log.technician_id || log.technician_signature || 'CERT-A&P-550'}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[9px] uppercase">
                     {log.status || 'COMPLETED'}
@@ -372,3 +374,4 @@ export default function MaintenanceHistoryPanel({
     </div>
   );
 }
+
